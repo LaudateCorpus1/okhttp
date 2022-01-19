@@ -50,6 +50,7 @@ buildscript {
     classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.4.10"
     classpath "org.jetbrains.dokka:dokka-gradle-plugin:0.10.1"
     classpath "com.android.tools.build:gradle:4.0.1"
+    classpath "gradle.plugin.com.google.cloud.artifactregistry:artifactregistry-gradle-plugin:2.1.4"
   }
 
   repositories {
@@ -65,6 +66,7 @@ plugins {
   id "me.champeau.gradle.japicmp" version "0.2.9"
   id "com.diffplug.spotless" version "5.1.2"
   id "net.ltgt.errorprone" version "1.2.1"
+  id "com.google.cloud.artifactregistry.gradle-plugin" version "2.1.4"
 }
 
 /** Returns the artifact ID for the project, or null if it is not published. */
@@ -118,6 +120,7 @@ subprojects { project ->
   apply plugin: 'checkstyle'
   apply plugin: 'ru.vyarus.animalsniffer'
   apply plugin: 'org.jetbrains.dokka'
+  apply plugin: "com.google.cloud.artifactregistry.gradle-plugin"
   sourceCompatibility = JavaVersion.VERSION_1_8
   targetCompatibility = JavaVersion.VERSION_1_8
 
@@ -286,6 +289,10 @@ subprojects { project ->
           username System.getenv('SONATYPE_NEXUS_USERNAME')
           password System.getenv('SONATYPE_NEXUS_PASSWORD')
         }
+      }
+      maven {
+        name = "chesscom"
+        url = "artifactregistry://SUPER_SECRET_URL"
       }
     }
   }
