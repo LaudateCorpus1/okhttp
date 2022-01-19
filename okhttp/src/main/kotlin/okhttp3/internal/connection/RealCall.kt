@@ -68,6 +68,21 @@ class RealCall(
   internal val eventListener: EventListener = client.eventListenerFactory.create(this)
 
   private val timeout = object : AsyncTimeout() {
+    var previousCallStacktrace: Throwable? = null
+
+    fun enter(callStacktrace: Throwable) {
+      try {
+        enter()
+        previousCallStacktrace = callStacktrace
+      } catch (e: IllegalStateException) {
+        if (e.message == "Unbalanced enter/exit") {
+          val oldStackTrace = previousCallStacktrace ?: throw IllegalStateException("No old stacktrace for unbalanced enter/exit", e)
+          e.initCause(callStacktrace.apply { initCause(oldStackTrace) })
+        }
+        throw e
+      }
+    }
+
     override fun timedOut() {
       cancel()
     }
@@ -147,7 +162,7 @@ class RealCall(
   override fun execute(): Response {
     check(executed.compareAndSet(false, true)) { "Already Executed" }
 
-    timeout.enter()
+    timeout.enter(tracingException())
     callStart()
     try {
       client.dispatcher.executed(this)
@@ -161,7 +176,7 @@ class RealCall(
     check(executed.compareAndSet(false, true)) { "Already Executed" }
 
     callStart()
-    client.dispatcher.enqueue(AsyncCall(responseCallback))
+    client.dispatcher.enqueue(AsyncCall(tracingException(), responseCallback))
   }
 
   override fun isExecuted(): Boolean = executed.get()
@@ -468,6 +483,7 @@ class RealCall(
   internal fun redactedUrl(): String = originalRequest.url.redact()
 
   internal inner class AsyncCall(
+    private val callStacktrace: Throwable,
     private val responseCallback: Callback
   ) : Runnable {
     @Volatile var callsPerHost = AtomicInteger(0)
@@ -512,7 +528,7 @@ class RealCall(
     override fun run() {
       threadName("OkHttp ${redactedUrl()}") {
         var signalledCallback = false
-        timeout.enter()
+        timeout.enter(callStacktrace)
         try {
           val response = getResponseWithInterceptorChain()
           signalledCallback = true
@@ -538,6 +554,10 @@ class RealCall(
       }
     }
   }
+
+  private fun tracingException() = RuntimeException(
+    (if (forWebSocket) "web socket" else "call") + " to " + originalRequest.url.toString()
+  )
 
   internal class CallReference(
     referent: RealCall,
